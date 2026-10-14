@@ -1,6 +1,6 @@
 # Laundry & Dry Wash POS
 
-A lightweight web-based point-of-sale and receipt printing app for laundry and dry wash businesses. The app lets staff create laundry orders, calculate totals with round-off adjustments, store orders in Supabase, export transactions, and print 80mm thermal receipts.
+A lightweight web-based point-of-sale and receipt printing app for laundry and dry wash businesses. The app lets staff create laundry orders, calculate totals with round-off adjustments, store orders in Firebase Cloud Firestore, export transactions, and print 80mm thermal receipts.
 
 ## Links
 
@@ -28,7 +28,7 @@ Repository: https://github.com/dhineshbuilder/Invoice_generator
 - Create laundry orders with customer name, remark, order number, order date, delivery date, and line items.
 - Item and customer suggestions for faster entry.
 - Quantity, price, subtotal, round-off, and final total calculation.
-- Supabase-backed order storage.
+- Firebase Cloud Firestore backed order storage.
 - Recent transactions dashboard.
 - Delete one order or clear all orders.
 - Export orders to Excel.
@@ -44,7 +44,7 @@ Repository: https://github.com/dhineshbuilder/Invoice_generator
 - Tailwind CSS
 - shadcn/ui and Radix UI
 - React Router
-- Supabase
+- Firebase (Cloud Firestore)
 - jsPDF and jspdf-autotable
 - SheetJS/xlsx
 - Vercel
@@ -56,9 +56,9 @@ src/
   App.tsx                 Route definitions and app providers
   main.tsx                React app entry point
   lib/
-    supabase.ts           Supabase client setup
+    firebase.ts           Firebase app & Firestore database setup
   store/
-    orders.ts             Order CRUD operations against Supabase
+    orders.ts             Order CRUD operations against Cloud Firestore
   pages/
     Login.tsx             Admin login screen
     Order.tsx             New order form and receipt creation flow
@@ -67,11 +67,9 @@ src/
   components/ui/          Shared shadcn/ui components
   styles/
     print.css             Receipt print styling
+    index.css             Global styling and tailwind tokens
   utils/
     format.ts             INR and date formatting helpers
-
-supabase/
-  migrations/             SQL migrations for the orders table
 
 public/
   screenshots/            README screenshots
@@ -79,27 +77,44 @@ public/
   logo1.png
 ```
 
-The frontend talks directly to Supabase using the public anon key configured in Vite environment variables. Order data is saved in a single `orders` table. Items are stored as JSONB so each order can keep its line-item list together.
+The frontend talks directly to Firebase Cloud Firestore using the configuration variables in Vite environment variables. Order data is saved in an `orders` collection. Items are stored as an array of objects so each order keeps its line-item list together.
 
-## Supabase Schema
+## Firestore Collection Schema
 
-The app expects this table:
+The app stores documents in the `orders` collection:
 
-```sql
-create table if not exists public.orders (
-  id text primary key,
-  customer_name text not null,
-  remark text default '',
-  created_at timestamptz not null default now(),
-  delivery_date timestamptz,
-  items jsonb not null default '[]'::jsonb,
-  round_off numeric(10,2) not null default 0.00,
-  total numeric(10,2) not null default 0.00,
-  updated_at timestamptz not null default now()
-);
+```typescript
+interface FirestoreOrder {
+  id: string;               // e.g. "ORD-101"
+  customer_name: string;    // e.g. "JK Residency"
+  remark: string;           // Notes or instructions
+  created_at: string;       // ISO timestamp
+  delivery_date: string;    // ISO timestamp or date string
+  items: Array<{            // Line items
+    id: string;
+    name: string;
+    qty: number;
+    price: number;
+  }>;
+  round_off: number;        // Numeric round-off adjustment
+  total: number;            // Grand total in INR (subtotal + round_off)
+}
 ```
 
-Run the full migration SQL from `supabase/migrations/` or paste the complete Supabase SQL setup into the Supabase SQL Editor before using the app.
+### Firestore Security Rules
+
+To allow the POS client to read, write, and delete orders:
+
+```javascript
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /orders/{orderId} {
+      allow read, write, delete: if true;
+    }
+  }
+}
+```
 
 ## Setup Instructions
 
@@ -127,15 +142,21 @@ npm.cmd install
 Create a `.env` file in the project root:
 
 ```env
-VITE_SUPABASE_URL=your_supabase_project_url
-VITE_SUPABASE_ANON_KEY=your_supabase_anon_key
+VITE_FIREBASE_API_KEY=your_firebase_api_key
+VITE_FIREBASE_AUTH_DOMAIN=your_project_id.firebaseapp.com
+VITE_FIREBASE_PROJECT_ID=your_firebase_project_id
+VITE_FIREBASE_STORAGE_BUCKET=your_project_id.appspot.com
+VITE_FIREBASE_MESSAGING_SENDER_ID=your_messaging_sender_id
+VITE_FIREBASE_APP_ID=your_firebase_app_id
 ```
 
-Use `.env.example` as the template. Do not commit real Supabase keys.
+Use `.env.example` as the template. Do not commit real keys.
 
-### 4. Create the Supabase database table
+### 4. Create the Firestore database
 
-Open your Supabase project, go to **SQL Editor**, and run the orders table SQL/migration. Make sure Row Level Security policies allow the anon client to select, insert, update, and delete orders if this POS is used without Supabase Auth.
+1. Open your [Firebase Console](https://console.firebase.google.com).
+2. Go to **Build > Firestore Database** and click **Create database**.
+3. Choose a location and start in **Test mode** (or configure the security rules above).
 
 ### 5. Run the development server
 
@@ -164,7 +185,7 @@ Username: admin
 Password: Admin1234
 ```
 
-This is a simple frontend-only login for POS access, not a production authentication system.
+This is a simple frontend-only login for POS counter access.
 
 ## Available Scripts
 
@@ -184,8 +205,12 @@ This project is ready for Vercel deployment.
 3. Add these environment variables in Vercel Project Settings:
 
 ```env
-VITE_SUPABASE_URL=your_supabase_project_url
-VITE_SUPABASE_ANON_KEY=your_supabase_anon_key
+VITE_FIREBASE_API_KEY=your_firebase_api_key
+VITE_FIREBASE_AUTH_DOMAIN=your_project_id.firebaseapp.com
+VITE_FIREBASE_PROJECT_ID=your_firebase_project_id
+VITE_FIREBASE_STORAGE_BUCKET=your_project_id.appspot.com
+VITE_FIREBASE_MESSAGING_SENDER_ID=your_messaging_sender_id
+VITE_FIREBASE_APP_ID=your_firebase_app_id
 ```
 
 4. Build command:
@@ -204,7 +229,7 @@ The included `vercel.json` rewrites all routes to `index.html`, so direct links 
 
 ## Notes
 
-- The app currently uses browser `localStorage` for admin login state.
-- Supabase is used only for order persistence.
+- The app uses browser `localStorage` for admin login state.
+- Firebase Cloud Firestore is used for real-time order persistence.
 - Receipt printing depends on the browser print dialog and the styles in `src/styles/print.css`.
 - Generated exports are created in the browser as `.xlsx` and `.pdf` files.

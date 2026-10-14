@@ -9,10 +9,12 @@ import { Order, OrderItem } from "@/types";
 import { addOrder } from "@/store/orders";
 import { formatINR } from "@/utils/format";
 import { useIsMobile } from "@/hooks/use-mobile";
+import { useAuth } from "@/contexts/AuthContext";
 
 export default function OrderPage() {
   const navigate = useNavigate();
   const isMobile = useIsMobile();
+  const { user, logout } = useAuth();
   const [customerName, setCustomerName] = useState("");
   const [remark, setRemark] = useState("");
   const [orderNumber, setOrderNumber] = useState("");
@@ -183,9 +185,13 @@ export default function OrderPage() {
     }
   };
 
-  const logout = () => {
-    localStorage.removeItem("laundry_dry_wash_auth");
-    navigate("/login");
+  const handleLogout = async () => {
+    try {
+      await logout();
+      navigate("/login");
+    } catch (err) {
+      console.error("Logout failed:", err);
+    }
   };
 
   return (
@@ -194,10 +200,15 @@ export default function OrderPage() {
       <header className="container py-6 flex flex-col md:flex-row md:items-center md:justify-between gap-3">
         <div>
           <h1 className="text-2xl md:text-3xl font-bold">LAUNDRY & DRY WASH</h1>
+          {user?.email && (
+            <p className="text-xs text-muted-foreground mt-0.5">
+              Logged in as: <span className="font-medium text-foreground">{user.email}</span>
+            </p>
+          )}
         </div>
-        <div className="flex gap-2 flex-wrap justify-end">
+        <div className="flex gap-2 flex-wrap justify-end items-center">
           <Button variant="secondary" onClick={() => navigate("/dashboard")}>Dashboard</Button>
-          <Button variant="outline" onClick={logout}>Logout</Button>
+          <Button variant="outline" onClick={handleLogout}>Logout</Button>
         </div>
       </header>
 

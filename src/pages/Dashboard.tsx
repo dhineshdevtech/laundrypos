@@ -9,8 +9,10 @@ import { formatDateTime, formatINR } from "@/utils/format";
 import { Link, useNavigate } from "react-router-dom";
 import { Seo } from "@/components/Seo";
 import { useIsMobile } from "@/hooks/use-mobile";
+import { useAuth } from "@/contexts/AuthContext";
 
 export default function Dashboard() {
+  const { user, logout } = useAuth();
   const [orders, setOrders] = useState<Order[]>([]);
   const [error, setError] = useReactState<string | null>(null);
   const navigate = useNavigate();
@@ -112,12 +114,32 @@ export default function Dashboard() {
     <main className="min-h-screen bg-background">
       <Seo title="Dashboard | Laundry & Dry Wash POS" description="View all transactions and reprint receipts." canonicalPath="/dashboard" />
       <header className="container py-6 flex flex-col md:flex-row md:items-center md:justify-between gap-3">
-        <h1 className="text-2xl md:text-3xl font-bold">All Orders ({orders.length})</h1>
-        <div className="flex gap-2 flex-wrap justify-end w-full md:w-auto">
+        <div>
+          <h1 className="text-2xl md:text-3xl font-bold">All Orders ({orders.length})</h1>
+          {user?.email && (
+            <p className="text-xs text-muted-foreground mt-0.5">
+              Logged in as: <span className="font-medium text-foreground">{user.email}</span>
+            </p>
+          )}
+        </div>
+        <div className="flex gap-2 flex-wrap justify-end w-full md:w-auto items-center">
           <Button className="w-full md:w-auto" onClick={exportToExcel}>Export to Excel</Button>
           <Button className="w-full md:w-auto" onClick={exportToPDF}>Export to PDF</Button>
           <Button className="w-full md:w-auto" variant="secondary" onClick={() => navigate("/order")}>New Order</Button>
-          <Button className="w-full md:w-auto" variant="outline" onClick={() => navigate("/login")}>Back</Button>
+          <Button
+            className="w-full md:w-auto"
+            variant="outline"
+            onClick={async () => {
+              try {
+                await logout();
+                navigate("/login");
+              } catch (err) {
+                console.error("Logout failed:", err);
+              }
+            }}
+          >
+            Logout
+          </Button>
         </div>
       </header>
 

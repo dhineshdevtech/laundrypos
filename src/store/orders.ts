@@ -1,70 +1,128 @@
 import { Order } from "@/types";
-import { supabase } from "@/lib/supabase";
+import { db, isFirebaseConfigured } from "@/lib/firebase";
+import {
+  collection,
+  doc,
+  getDocs,
+  setDoc,
+  deleteDoc,
+  query,
+  orderBy,
+  writeBatch,
+} from "firebase/firestore";
 
-export async function removeAllOrders() {
-  const { error } = await supabase
-    .from('orders')
-    .delete()
-    .neq('id', '');
+const ORDERS_COLLECTION = "orders";
 
-  if (error) throw new Error("Failed to delete all orders");
+export async function removeAllOrders(): Promise<void> {
+  if (!isFirebaseConfigured) {
+    throw new Error("Firebase is not configured. Please check your .env file.");
+  }
+
+  const querySnapshot = await getDocs(collection(db, ORDERS_COLLECTION));
+  if (querySnapshot.empty) return;
+
+  const batch = writeBatch(db);
+  querySnapshot.docs.forEach((docSnap) => {
+    batch.delete(docSnap.ref);
+  });
+
+  await batch.commit();
 }
 
 export async function loadOrders(): Promise<Order[]> {
   try {
-    const { data, error } = await supabase
-      .from('orders')
-      .select('*')
-      .order('created_at', { ascending: false });
+    if (!isFirebaseConfigured) {
+      console.warn("Firebase is not configured yet. Returning empty orders list.");
+      return [];
+    }
 
-    if (error) throw error;
+    let ordersList: Order[] = [];
 
-    return (data || []).map(order => ({
-      id: order.id,
-      customerName: order.customer_name,
-      remark: order.remark || '',
-      createdAt: order.created_at,
-      deliveryDate: order.delivery_date || '',
-      items: order.items || [],
-      roundOff: order.round_off || 0
-    }));
+    try {
+      const q = query(
+        collection(db, ORDERS_COLLECTION),
+        orderBy("created_at", "desc")
+      );
+      const snapshot = await getDocs(q);
+      ordersList = snapshot.docs.map((docSnap) => {
+        const data = docSnap.data();
+        return {
+          id: data.id || docSnap.id,
+          customerName: data.customer_name || "",
+          remark: data.remark || "",
+          createdAt: data.created_at || new Date().toISOString(),
+          deliveryDate: data.delivery_date || "",
+          items: Array.isArray(data.items) ? data.items : [],
+          roundOff: Number(data.round_off) || 0,
+        };
+      });
+    } catch (queryErr) {
+      // Fallback: in case orderBy requires an index or fails, fetch all and sort in memory
+      console.warn("Ordered query failed, falling back to in-memory sort:", queryErr);
+      const snapshot = await getDocs(collection(db, ORDERS_COLLECTION));
+      ordersList = snapshot.docs
+        .map((docSnap) => {
+          const data = docSnap.data();
+          return {
+            id: data.id || docSnap.id,
+            customerName: data.customer_name || "",
+            remark: data.remark || "",
+            createdAt: data.created_at || new Date().toISOString(),
+            deliveryDate: data.delivery_date || "",
+            items: Array.isArray(data.items) ? data.items : [],
+            roundOff: Number(data.round_off) || 0,
+          };
+        })
+        .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+    }
+
+    return ordersList;
   } catch (error) {
-    console.error("Failed to load orders:", error);
+    console.error("Failed to load orders from Firebase Firestore:", error);
     return [];
   }
 }
 
-export async function addOrder(order: Order) {
+export async function addOrder(order: Order): Promise<void> {
+  if (!isFirebaseConfigured) {
+    throw new Error("Firebase is not configured. Please set your Firebase credentials in .env");
+  }
+
   try {
-    const subtotal = order.items.reduce((sum, item) => sum + (item.qty * item.price), 0);
-    const roundOff = order.roundOff || 0;
+    const subtotal = order.items.reduce(
+      (sum, item) => sum + (Number(item.qty) || 0) * (Number(item.price) || 0),
+      0
+    );
+    const roundOff = Number(order.roundOff) || 0;
     const total = subtotal + roundOff;
 
-    const { error } = await supabase
-      .from('orders')
-      .insert({
-        id: order.id,
-        customer_name: order.customerName,
-        remark: order.remark || null,
-        created_at: order.createdAt,
-        delivery_date: order.deliveryDate || null,
-        items: order.items,
-        round_off: roundOff,
-        total: total
-      });
-
-    if (error) throw error;
+    const docRef = doc(db, ORDERS_COLLECTION, order.id);
+    await setDoc(docRef, {
+      id: order.id,
+      customer_name: order.customerName,
+      remark: order.remark || "",
+      created_at: order.createdAt || new Date().toISOString(),
+      delivery_date: order.deliveryDate || "",
+      items: order.items,
+      round_off: roundOff,
+      total: total,
+    });
   } catch (error) {
-    console.error("Failed to add order:", error);
+    console.error("Failed to add order to Firebase Firestore:", error);
     throw error;
   }
 }
 
-export async function removeOrder(id: string) {
-  const { error } = await supabase
-    .from('orders')
-    .delete()
-    .eq('id', id);
+export async function removeOrder(id: string): Promise<void> {
+  if (!isFirebaseConfigured) {
+    throw new Error("Firebase is not configured. Please check your .env file.");
+  }
 
-  if (error) throw new Error("Failed to delete order");
+  try {
+    const docRef = doc(db, ORDERS_COLLECTION, id);
+    await deleteDoc(docRef);
+  } catch (error) {
+    console.error("Failed to delete order from Firebase Firestore:", error);
+    throw new Error("Failed to delete order");
+  }
 }
