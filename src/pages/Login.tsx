@@ -195,10 +195,12 @@ export default function Login() {
             <span>Continue with Google</span>
           </Button>
 
-          <div className="relative flex items-center justify-center">
-            <div className="border-t w-full border-muted-foreground/20" />
-            <span className="bg-card px-2 text-xs uppercase text-muted-foreground">or with email</span>
-            <div className="border-t w-full border-muted-foreground/20" />
+          <div className="flex items-center gap-3 my-2">
+            <div className="h-px flex-1 bg-border" />
+            <span className="text-xs uppercase tracking-wider text-muted-foreground whitespace-nowrap font-medium select-none">
+              or with email
+            </span>
+            <div className="h-px flex-1 bg-border" />
           </div>
 
           {/* Form */}
